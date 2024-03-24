@@ -153,7 +153,7 @@ export class MeshSlicer {
   }
 
   selectEdges(poly: IndexedPolygon): [number, number] {
-    // we select on edge indices, with value the length of the edge
+    // we choose the first edge by selecting on edge indices, with value the length of the edge
     let selector = new TopN<Number>(3);
     poly.forEach((oriEdge, edgeIdx) => {
       let vert0 = this.mesh.vertices[oriEdge.edge.indices[0]];
@@ -161,7 +161,56 @@ export class MeshSlicer {
       let deltaV = Vector2.Subtract(vert1, vert0);
       selector.insert(edgeIdx, this.getFuzzValue(this.edgeLengthFuzzFactor) * deltaV.lengthSq());
     });
-    return selector.multiSelect(2) as [number, number];
+    let firstIdx: number = selector.select().valueOf();
+    // Get all the relevant info from the first edge
+    let firstEdgeVert0 = this.mesh.vertices[poly[firstIdx].edge.indices[0]];
+    let firstEdgeVert1 = this.mesh.vertices[poly[firstIdx].edge.indices[1]];
+    let firstEdgeMidpoint = Vector2.Interpolate(firstEdgeVert0, firstEdgeVert1, 0.5);
+    let firstEdgeVector = Vector2.Subtract(firstEdgeVert1, firstEdgeVert0).normalize();
+
+    // Now choose the second edge by selecting similarly, but limiting ourselves
+    // to edges with midpoints between 30 and 60 degrees from the midpoint of
+    // the edge we're cutting (and vice versa).
+    let secondSelector = new TopN<Number>(3);
+    poly.forEach((oriEdge, edgeIdx) => {
+      if (edgeIdx != firstIdx) {
+        let secondEdgeVert0 = this.mesh.vertices[oriEdge.edge.indices[0]];
+        let secondEdgeVert1 = this.mesh.vertices[oriEdge.edge.indices[1]];
+        let secondEdgeRawVector = Vector2.Subtract(secondEdgeVert1, secondEdgeVert0);
+        let secondEdgeVector = Vector2.Normalize(secondEdgeRawVector);
+        let secondEdgeMidpoint = Vector2.Interpolate(secondEdgeVert0, secondEdgeVert1, 0.5);
+        let midToMidVector = Vector2.Subtract(secondEdgeMidpoint, firstEdgeMidpoint).normalize();
+        if (
+          (Math.abs(Vector2.Dot(firstEdgeVector, midToMidVector)) < 0.5)
+          && (Math.abs(Vector2.Dot(secondEdgeVector, midToMidVector)) < 0.5)
+        )
+          secondSelector.insert(edgeIdx,
+            this.getFuzzValue(this.edgeLengthFuzzFactor) * secondEdgeRawVector.lengthSq());
+      }
+    });
+    // If we have no vectors that fit the criterion, then let's just find the pair with
+    // the largest value of the minimum of the two angles.
+    if (secondSelector.topNArray.length == 0) {
+      let minAngleSelector = new TopN<Number>(1);
+      poly.forEach((oriEdge, edgeIdx) => {
+        if (edgeIdx != firstIdx) {
+          let secondEdgeVert0 = this.mesh.vertices[oriEdge.edge.indices[0]];
+          let secondEdgeVert1 = this.mesh.vertices[oriEdge.edge.indices[1]];
+          let secondEdgeRawVector = Vector2.Subtract(secondEdgeVert1, secondEdgeVert0);
+          let secondEdgeVector = Vector2.Normalize(secondEdgeRawVector);
+          let secondEdgeMidpoint = Vector2.Interpolate(secondEdgeVert0, secondEdgeVert1, 0.5);
+          let midToMidVector = Vector2.Subtract(secondEdgeMidpoint, firstEdgeMidpoint).normalize();
+          let maxDotProd = Math.max(
+            Math.abs(Vector2.Dot(firstEdgeVector, midToMidVector)),
+            Math.abs(Vector2.Dot(secondEdgeVector, midToMidVector))
+          );
+          minAngleSelector.insert(edgeIdx, -maxDotProd);
+        }
+      });
+      return [firstIdx, minAngleSelector.select().valueOf()];
+    }
+    // If we do, then we just find one of those sets
+    return [firstIdx, secondSelector.select().valueOf()];
   }
 
   indexedPolyToCoordinates(indexedPoly: IndexedPolygon): Polygon {
