@@ -7,51 +7,38 @@ const HEIGHT: number = 600;
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div>
+  <div class="buttonHolder">
+  <div><button id="resetBtn">Reset</button></div>
+  <span><button id="sliceBtn">Slice</button><input type="number" class="smallNum" id="numTimes" value="1"/> times</span>
+  <div><input type="checkbox" id="offsetMidpoints"/>move new verts after slicing</div>
   <div class="canvasHolder">
   <canvas id="canvas" width="${WIDTH}" height="${HEIGHT}"/>
   </div>
   </div>
 `;
 
-function randomColor(): Color {
-  return [
-    Math.floor(256*Math.random()),
-    Math.floor(256*Math.random()),
-    Math.floor(256*Math.random()),
-  ];
-}
-
-type Color = [number, number, number];
 let meshSlicer = new MeshSlicer({width: WIDTH, height: HEIGHT});
-let colors: Array<Color> = [];
 let canvas = document.getElementById('canvas') as HTMLCanvasElement;
+let resetBtn = document.getElementById("resetBtn") as HTMLButtonElement;
+let sliceBtn = document.getElementById("sliceBtn") as HTMLButtonElement;
+let numTimesInput = document.getElementById("numTimes") as HTMLInputElement;
 let ctx = canvas.getContext("2d");
-colors.push(randomColor());
-renderPolyMesh(ctx!, meshSlicer.mesh, colors);
-window.addEventListener("keydown", (evt) => {
-  if (evt.key == " ") {
-/*
-    let randomIdx = Math.floor(meshSlicer.polyMesh.polygons.length * Math.random());
-    let poly = meshSlicer.polyMesh.polygons[randomIdx];
-    let edgeCount = poly.length;
-    let edge0Idx = Math.floor(edgeCount * Math.random());
-    let edge1Idx: number;
-    do {
-      edge1Idx = Math.floor(edgeCount * Math.random());
-    } while (edge1Idx == edge0Idx);
-    console.log(`Splitting poly ${randomIdx} between edges ${edge0Idx}, ${edge1Idx}`);
-    polyMesh.splitPolygon(poly, edge0Idx, edge1Idx);
-*/
-    meshSlicer.slice();
-    colors.push(randomColor());
-    renderPolyMesh(ctx!, meshSlicer.mesh, colors);
-  }
+renderPolyMesh(ctx!, meshSlicer.mesh);
+resetBtn.addEventListener("click", () => {
+  meshSlicer = new MeshSlicer({width: WIDTH, height: HEIGHT});
+  renderPolyMesh(ctx!, meshSlicer.mesh);
 });
+sliceBtn.addEventListener("click", () => {
+  let numTimes: number = parseInt(numTimesInput.value);
+  for (let idx = 0; idx < numTimes; idx++) {
+    meshSlicer.slice();
+  }
+  renderPolyMesh(ctx!, meshSlicer.mesh);
+})
 
 function renderPolyMesh(
   ctx: CanvasRenderingContext2D,
-  polyMesh: PolygonMesh,
-  _: Array<Color>
+  polyMesh: PolygonMesh
 ): void {
   ctx.lineWidth = 3;
   ctx.strokeStyle = "black";
