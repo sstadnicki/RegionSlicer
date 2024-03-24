@@ -1,5 +1,4 @@
 import { Vector2 } from "./vector";
-import { Polygon } from "./polygon";
 
 // This class represents a set of connected polygons, along with the
 // connectivity information. For greatest flexibility, we take our polygons
@@ -8,16 +7,16 @@ import { Polygon } from "./polygon";
 // polygons on either side of it. (Note that there are border edges, which
 // will only have one adjacent polygon).
 
-type Edge = {
+export type Edge = {
   indices: [number, number];
   adjacentPolys: [IndexedPolygon | undefined, IndexedPolygon | undefined];
 }
 
-type OrientedEdge = {
+export type OrientedEdge = {
   edge: Edge;
   orientation: number;
 };
-type IndexedPolygon = Array<OrientedEdge>;
+export type IndexedPolygon = Array<OrientedEdge>;
 
 export class PolygonMesh {
   vertices: Array<Vector2>;
@@ -65,21 +64,33 @@ export class PolygonMesh {
   }
 
   // splitPolygon takes the requested polygon and a pair of indices of the edges
-  // to split it along. It then takes the midpoint (for now) of each of those edges
+  // to split it along. It then takes a point along each of those edges (interpolated
+  // by t between the two vertices, where t is an input parameter)
   // and creates two new edges each, one to either side of the midpoint, along with
   // another edge between the two midpoints. After that it creates two new polygons,
   // each using the new midpoint-to-midpoint edge and 'half' of the edges from the
   // original polygon.
-  splitPolygon(poly: IndexedPolygon, firstEdgeIdx: number, secondEdgeIdx: number): void {
+  splitPolygon(
+    poly: IndexedPolygon,
+    firstEdgeIdx: number, secondEdgeIdx: number,
+    firstEdgeT: number = 0.5, secondEdgeT: number = 0.5): void {
     // First grab the edges themselves
-    let edgeIndices = [Math.min(firstEdgeIdx, secondEdgeIdx), Math.max(firstEdgeIdx, secondEdgeIdx)];
+    let edgeIndices: Array<number> = [];
+    let edgeTValues: Array<number> = [];
+    if (firstEdgeIdx < secondEdgeIdx) {
+      edgeIndices = [firstEdgeIdx, secondEdgeIdx];
+      edgeTValues = [firstEdgeT, secondEdgeT];
+    } else {
+      edgeIndices = [secondEdgeIdx, firstEdgeIdx];
+      edgeTValues = [secondEdgeT, firstEdgeT];
+    }
     let oldOrientedEdges = edgeIndices.map((idx) => poly[idx]);
     // Then their midpoints
-    let midpoints = oldOrientedEdges.map((edge) =>
+    let midpoints = oldOrientedEdges.map((edge, idx) =>
       Vector2.Interpolate(
         this.vertices[edge.edge.indices[0]],
         this.vertices[edge.edge.indices[1]],
-        0.5
+        edgeTValues[idx]
       )
     );
     let midpointIndices = [this.vertices.length, this.vertices.length+1];

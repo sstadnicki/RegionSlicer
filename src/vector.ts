@@ -170,4 +170,6 @@ export class Vector2 {
   public static Interpolate(v0: Vector2, v1: Vector2, t: number): Vector2 {
     return Vector2.ScalarMult(v0, 1-t).add(Vector2.ScalarMult(v1, t));
   }
+
+  // public static ZeroVector: Vector2 = new Vector2(0,0);
 }
