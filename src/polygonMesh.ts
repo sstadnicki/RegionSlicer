@@ -18,6 +18,30 @@ export type OrientedEdge = {
 };
 export type IndexedPolygon = Array<OrientedEdge>;
 
+  // Helper function that finds the proportion of the way from v0 to v1 that the line
+  // from v2-v3 intersects the line from v0-v1 at.
+  function findIntersectionT(
+    v0: Vector2, v1: Vector2, v2: Vector2, v3: Vector2
+  ): number {
+    let delta10: Vector2 = Vector2.Subtract(v1, v0);
+    let delta32: Vector2 = Vector2.Subtract(v3, v2);
+    let delta20: Vector2 = Vector2.Subtract(v2, v0);
+    // We want to solve the simultaneous equations v0+t*delta10 = v2+s*delta32
+    // This boils down to
+    // t*delta10.x + s*delta32.x = delta20.x and
+    // t*delta10.y + s*delta32.y = delta20.y ;
+    // in other words, ((delta10.x, delta32.x), (delta10.y, delta32.y)) . (t s)^T
+    // = (delta20.x, delta20.y)^T
+    // So we invert the matrix, getting
+    // ((delta32.y, -delta32.x), (-delta10.y, delta10.x))/(d10.x*d32.y-d10.y*d32.x)
+    // as the inverse, and multiply that by (d20x, d20y) to get our values.
+    // Since we only want the x, we get
+    // t = (d32.y*d20.x-d32.x-d20.y) / (d10.x*d32.y-d10.y*d32.x) .
+    // This is Cross(d20, d32) / Cross(d10, d32).
+    return Vector2.Cross(delta20, delta32) / Vector2.Cross(delta10, delta32);
+  };
+
+
 export class PolygonMesh {
   vertices: Array<Vector2>;
   edges: Array<Edge>;
@@ -73,7 +97,8 @@ export class PolygonMesh {
   splitPolygon(
     poly: IndexedPolygon,
     firstEdgeIdx: number, secondEdgeIdx: number,
-    firstEdgeT: number = 0.5, secondEdgeT: number = 0.5): void {
+    firstEdgeT: number = 0.5, secondEdgeT: number = 0.5,
+    displaceVerts: boolean = false): void {
     // First grab the edges themselves
     let edgeIndices: Array<number> = [];
     let edgeTValues: Array<number> = [];
@@ -94,8 +119,39 @@ export class PolygonMesh {
       )
     );
     let midpointIndices = [this.vertices.length, this.vertices.length+1];
-    this.vertices.push(midpoints[0]);
-    this.vertices.push(midpoints[1]);
+    this.vertices.push(midpoints[0].clone());
+    this.vertices.push(midpoints[1].clone());
+    if (displaceVerts) {
+      // If we're displacing verts, let's figure out how far we can displace them
+      let tValues = oldOrientedEdges.map((oriEdge, edgeIdx) => {
+        let otherPoly = oriEdge.edge.adjacentPolys[1-oriEdge.orientation];
+        if (otherPoly) {
+          let otherPolyEdgeIdx = otherPoly.findIndex((otherOriEdge) =>
+            otherOriEdge.edge == oriEdge.edge
+          );
+          let otherPolyAdjacentEdges = [
+            otherPoly[(otherPolyEdgeIdx+1)%otherPoly.length],
+            otherPoly[(otherPolyEdgeIdx+otherPoly.length-1)%otherPoly.length],
+          ];
+          let minT = otherPolyAdjacentEdges.map((oriEdge) => {
+            let t = findIntersectionT(
+              midpoints[edgeIdx], midpoints[1-edgeIdx],
+              this.vertices[oriEdge.edge.indices[0]], this.vertices[oriEdge.edge.indices[1]]) / 2;
+            // if we get a negative t then we can never intersect, so we'll return 1
+            // (since this is getting min'd with 1/4 anyway).
+            return (t < 0)? 1: t;
+          }).reduce((prev, cur) => Math.min(prev, cur), 1/4);
+          return minT;
+        } else {
+          return Number.MAX_VALUE;
+        }
+      })
+      tValues.forEach((t, idx) => {
+        if (t != Number.MAX_VALUE) {
+          this.vertices[this.vertices.length-2+idx] = Vector2.Interpolate(midpoints[idx], midpoints[1-idx], t);
+        }
+      })
+    }
 
     // Now we create new edges; conceptually two for each of the original two edges,
     // though for convenience that's handled by mutating the values of one of the two

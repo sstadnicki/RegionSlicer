@@ -133,12 +133,12 @@ export class MeshSlicer {
     return Math.exp(randVal);
   }
 
-  slice() {
+  slice(displaceVerts: boolean = false) {
     let poly=this.selectPolygon();
     let edges: [number, number] = this.selectEdges(poly);
     let edge0RandomMidpoint = Math.random()*this.midpointRandomRange + (1-this.midpointRandomRange)/2;
     let edge1RandomMidpoint = Math.random()*this.midpointRandomRange + (1-this.midpointRandomRange)/2;
-    this.mesh.splitPolygon(poly, edges[0], edges[1], edge0RandomMidpoint, edge1RandomMidpoint);
+    this.mesh.splitPolygon(poly, edges[0], edges[1], edge0RandomMidpoint, edge1RandomMidpoint, displaceVerts);
   }
 
   selectPolygon(): IndexedPolygon {

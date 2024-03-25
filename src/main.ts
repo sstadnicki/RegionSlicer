@@ -22,6 +22,7 @@ let canvas = document.getElementById('canvas') as HTMLCanvasElement;
 let resetBtn = document.getElementById("resetBtn") as HTMLButtonElement;
 let sliceBtn = document.getElementById("sliceBtn") as HTMLButtonElement;
 let numTimesInput = document.getElementById("numTimes") as HTMLInputElement;
+let offsetMidpointsInput = document.getElementById("offsetMidpoints") as HTMLInputElement;
 let ctx = canvas.getContext("2d");
 renderPolyMesh(ctx!, meshSlicer.mesh);
 resetBtn.addEventListener("click", () => {
@@ -31,7 +32,7 @@ resetBtn.addEventListener("click", () => {
 sliceBtn.addEventListener("click", () => {
   let numTimes: number = parseInt(numTimesInput.value);
   for (let idx = 0; idx < numTimes; idx++) {
-    meshSlicer.slice();
+    meshSlicer.slice(offsetMidpointsInput.checked);
   }
   renderPolyMesh(ctx!, meshSlicer.mesh);
 })
