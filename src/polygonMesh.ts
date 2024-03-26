@@ -20,6 +20,19 @@ export type OrientedEdge = {
 };
 export type IndexedPolygon = Array<OrientedEdge>;
 
+const GREEBLE_BASE_DEPTH = 10;
+const GREEBLE_BASE_BREADTH = 12;
+const GREEBLE_LEVELS = 3;
+const GREEBLE_DELTA = 2;
+type GreebleData = {
+  // relative value, distance from one vertex to the other
+  greebleSpot: number,
+  // How deep (in global units) the greeble goes.
+  greebleDepth: number,
+  // How wide (in global units) the greeble is.
+  greebleBreadth: number
+};
+
   // Helper function that finds the proportion of the way from v0 to v1 that the line
   // from v2-v3 intersects the line from v0-v1 at.
   function findIntersectionT(
@@ -243,16 +256,36 @@ export class PolygonMesh {
 
     // Finally finally, add all the new edges and the new polygon to the arrays
     this.polygons.push(newPoly);
-    this.edges.concat([...newEdges]);
+    this.edges.push(...newEdges);
     this.edges.push(newMiddleEdge);
   }
 
   // Returns an SVG node with paths and polygon elements for each polygon in the mesh.
-  public generateSVG(): SVGElement {
+  public generateSVG(greebleEdges: boolean): SVGElement {
 // A little one-off function for creating an 'x y' string from a Vector2
     let Vec2ToStr: (v: Vector2, s:string) => string =
     (v, s) => `${v.data[0]}${s}${v.data[1]}`;
 
+    // If we have to do some greebling, then create greebles for each edge
+    let edgeGreebleArray: Array<GreebleData> = [];
+    if (greebleEdges) {
+      edgeGreebleArray = this.edges.map((edge) => {
+        let edgeLength = Vector2.Subtract(this.vertices[edge.indices[1]], this.vertices[edge.indices[0]]).length();
+        let greebleDepth = Math.min(
+          GREEBLE_BASE_DEPTH+GREEBLE_DELTA*(Math.floor(GREEBLE_LEVELS*Math.random())),
+          0.2*edgeLength
+        );
+        let greebleBreadth = Math.min(
+          GREEBLE_BASE_BREADTH+GREEBLE_DELTA*(Math.floor(GREEBLE_LEVELS*Math.random())),
+          0.2*edgeLength*GREEBLE_BASE_BREADTH/GREEBLE_BASE_DEPTH
+        );
+        return {
+          greebleSpot: 0.4+0.2*Math.random(),
+          greebleDepth: greebleDepth,
+          greebleBreadth: greebleBreadth
+        };
+      });
+    }
     let rootSVGElement: SVGElement = document.createElementNS(svgSpace, 'svg') as SVGElement;
     let diagonalVec: Vector2 = Vector2.Subtract(this.viewMax, this.viewMin);
     rootSVGElement.setAttribute("width", diagonalVec.data[0].toString());
@@ -261,24 +294,74 @@ export class PolygonMesh {
       `${Vec2ToStr(this.viewMin, ' ')} ${Vec2ToStr(diagonalVec, ' ')}`
     );
     this.polygons.forEach(poly => {
-      let verts: Array<Vector2> = poly.map((oriEdge) =>
-        this.vertices[oriEdge.edge.indices[oriEdge.orientation]]
-      );
       let groupElement: SVGGElement = document.createElementNS(svgSpace, 'g') as SVGGElement;
       let pathElement: SVGPathElement = document.createElementNS(svgSpace, 'path') as SVGPathElement;
       let polygonElement: SVGPolygonElement = document.createElementNS(svgSpace, 'polygon') as SVGPolygonElement;
-      let pathString = `M ${Vec2ToStr(verts[0], ' ')}`;
+      // First build the polygon element, connecting together the verts of this poly
       let polygonString = '';
+      let verts: Array<Vector2> = poly.map((oriEdge) =>
+        this.vertices[oriEdge.edge.indices[oriEdge.orientation]]
+      );
       verts.forEach((vert, vertIdx) => {
         polygonString += ` ${Vec2ToStr(vert, ',')}`;
-        pathString += ` L ${Vec2ToStr(verts[(vertIdx+1)%verts.length], ' ')}`;
       });
       polygonElement.setAttribute('points', polygonString);
-      polygonElement.setAttribute('stroke', 'black');
-      polygonElement.setAttribute('fill', 'white');
+      // Now build out the path element, moving to the first point and then
+      // following the edges with appropriate greebling.
+      let pathString = `M ${Vec2ToStr(verts[0], ' ')}`;
+      poly.forEach(oriEdge => {
+        if (greebleEdges && oriEdge.edge.adjacentPolys[0] && oriEdge.edge.adjacentPolys[1]) {
+          // find the greeble corresponding to this edge
+          let greebleIdx = this.edges.indexOf(oriEdge.edge);
+          if (greebleIdx < 0) {
+            greebleIdx = 0;
+          }
+          let greeble = edgeGreebleArray[greebleIdx];
+          let vert0 = this.vertices[oriEdge.edge.indices[oriEdge.orientation]];
+          let vert1 = this.vertices[oriEdge.edge.indices[1-oriEdge.orientation]];
+          let edgeVec = Vector2.Subtract(vert1, vert0);
+          let normalizedEdgeVec = Vector2.Normalize(edgeVec);
+          let orthogonalVec = Vector2.Perpendicular(normalizedEdgeVec);
+          // Flip orthogonalVec depending on the direction of the edge
+          orthogonalVec.scalarMult(1-2*oriEdge.orientation);
+          let greebleMidpoint = Vector2.Interpolate(
+            this.vertices[oriEdge.edge.indices[0]],
+            this.vertices[oriEdge.edge.indices[1]],
+            greeble.greebleSpot
+          );
+          // Let's find the coordinates of the left and right corners of our greeble
+          let greebleLeftSide = Vector2.Add(
+            greebleMidpoint,
+            Vector2.ScalarMult(normalizedEdgeVec, -greeble.greebleBreadth/2)
+          );
+          let greebleRightSide = Vector2.Add(
+            greebleMidpoint,
+            Vector2.ScalarMult(normalizedEdgeVec, greeble.greebleBreadth/2)
+          );
+          // And the upper corners
+          let greebleTopLeft = Vector2.Add(
+            greebleLeftSide,
+            Vector2.ScalarMult(orthogonalVec, greeble.greebleDepth)
+          );
+          let greebleTopRight = Vector2.Add(
+            greebleRightSide,
+            Vector2.ScalarMult(orthogonalVec, greeble.greebleDepth)
+          );
+          // Now, since we know we should be at vert0, let's go vert0 -> greebleLeftSide,
+          // then build a bezier curve left -> topleft -> topright -> right, then go
+          // greebleRightSide -> vert1.
+          pathString += ` L ${Vec2ToStr(greebleLeftSide, ' ')}`;
+          pathString +=
+          ` C ${Vec2ToStr(greebleTopLeft, ' ')}, ${Vec2ToStr(greebleTopRight, ' ')}, ${Vec2ToStr(greebleRightSide, ' ')}`;
+          pathString += ` L ${Vec2ToStr(vert1, ' ')}`;
+        } else {
+          pathString += ` L ${Vec2ToStr(this.vertices[oriEdge.edge.indices[1-oriEdge.orientation]], ' ')}`;
+        }
+      });
+      pathElement.setAttribute('stroke', 'red');
       pathElement.setAttribute('d', pathString);
-      groupElement.appendChild(pathElement);
       groupElement.appendChild(polygonElement);
+      groupElement.appendChild(pathElement);
       rootSVGElement.appendChild(groupElement);
     });
     return rootSVGElement;

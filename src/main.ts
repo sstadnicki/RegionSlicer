@@ -20,13 +20,14 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     </div>
     <div class="exportButtonHolder">
       <button id="exportBtn">Export SVG</button>
+      <input type="checkbox" id="greebleEdges" />Greeble edges in SVG
     </div>
     <div class="svgHolder" id="svgDiv">
     </div>
   </div>
 `;
 
-let canvas = document.getElementById('canvas') as HTMLCanvasElement;
+let canvas = document.getElementById("canvas") as HTMLCanvasElement;
 let resetBtn = document.getElementById("resetBtn") as HTMLButtonElement;
 let sliceBtn = document.getElementById("sliceBtn") as HTMLButtonElement;
 let exportBtn = document.getElementById("exportBtn") as HTMLButtonElement;
@@ -34,6 +35,7 @@ let numTimesInput = document.getElementById("numTimes") as HTMLInputElement;
 let widthInput = document.getElementById("widthInput") as HTMLInputElement;
 let heightInput = document.getElementById("heightInput") as HTMLInputElement;
 let offsetMidpointsInput = document.getElementById("offsetMidpoints") as HTMLInputElement;
+let greebleEdgesInput = document.getElementById("greebleEdges") as HTMLInputElement;
 //let svgHolderDiv = document.getElementById("svgDiv") as HTMLDivElement;
 let ctx = canvas.getContext("2d");
 let meshSlicer = new MeshSlicer({width: canvas.width, height: canvas.height});
@@ -49,7 +51,7 @@ sliceBtn.addEventListener("click", () => {
 widthInput.addEventListener('change', () => resetMesh(ctx!));
 heightInput.addEventListener('change', () => resetMesh(ctx!));
 exportBtn.addEventListener("click", () => {
-  const svgOutput = meshSlicer.mesh.generateSVG();
+  const svgOutput = meshSlicer.mesh.generateSVG(greebleEdgesInput.checked);
   const serializer = new XMLSerializer();
   const outStr = serializer.serializeToString(svgOutput);
   const blob = new Blob([outStr], {type: 'image/svg+xml'});
