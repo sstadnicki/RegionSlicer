@@ -26,11 +26,13 @@ const GREEBLE_LEVELS = 3;
 const GREEBLE_DELTA = 2;
 type GreebleData = {
   // relative value, distance from one vertex to the other
-  greebleSpot: number,
+  location: number,
   // How deep (in global units) the greeble goes.
-  greebleDepth: number,
-  // How wide (in global units) the greeble is.
-  greebleBreadth: number
+  depth: number,
+  // How wide (in global units) the greeble is at its base.
+  baseBreadth: number,
+  // How wide (in global units) the greeble's control points are at the top
+  topBreadth: number
 };
 
   // Helper function that finds the proportion of the way from v0 to v1 that the line
@@ -273,16 +275,17 @@ export class PolygonMesh {
         let edgeLength = Vector2.Subtract(this.vertices[edge.indices[1]], this.vertices[edge.indices[0]]).length();
         let greebleDepth = Math.min(
           GREEBLE_BASE_DEPTH+GREEBLE_DELTA*(Math.floor(GREEBLE_LEVELS*Math.random())),
-          0.2*edgeLength
+          0.4*edgeLength
         );
         let greebleBreadth = Math.min(
           GREEBLE_BASE_BREADTH+GREEBLE_DELTA*(Math.floor(GREEBLE_LEVELS*Math.random())),
-          0.2*edgeLength*GREEBLE_BASE_BREADTH/GREEBLE_BASE_DEPTH
+          0.25*edgeLength
         );
         return {
-          greebleSpot: 0.4+0.2*Math.random(),
-          greebleDepth: greebleDepth,
-          greebleBreadth: greebleBreadth
+          location: 0.3+0.4*Math.random(),
+          depth: greebleDepth,
+          baseBreadth: greebleBreadth,
+          topBreadth: 1.6*greebleBreadth
         };
       });
     }
@@ -302,7 +305,7 @@ export class PolygonMesh {
       let verts: Array<Vector2> = poly.map((oriEdge) =>
         this.vertices[oriEdge.edge.indices[oriEdge.orientation]]
       );
-      verts.forEach((vert, vertIdx) => {
+      verts.forEach((vert) => {
         polygonString += ` ${Vec2ToStr(vert, ',')}`;
       });
       polygonElement.setAttribute('points', polygonString);
@@ -327,25 +330,29 @@ export class PolygonMesh {
           let greebleMidpoint = Vector2.Interpolate(
             this.vertices[oriEdge.edge.indices[0]],
             this.vertices[oriEdge.edge.indices[1]],
-            greeble.greebleSpot
+            greeble.location
           );
           // Let's find the coordinates of the left and right corners of our greeble
           let greebleLeftSide = Vector2.Add(
             greebleMidpoint,
-            Vector2.ScalarMult(normalizedEdgeVec, -greeble.greebleBreadth/2)
+            Vector2.ScalarMult(normalizedEdgeVec, -greeble.baseBreadth/2)
           );
           let greebleRightSide = Vector2.Add(
             greebleMidpoint,
-            Vector2.ScalarMult(normalizedEdgeVec, greeble.greebleBreadth/2)
+            Vector2.ScalarMult(normalizedEdgeVec, greeble.baseBreadth/2)
           );
           // And the upper corners
+          let greebleTopCenter = Vector2.Add(
+            greebleMidpoint,
+            Vector2.ScalarMult(orthogonalVec, greeble.depth)
+          );
           let greebleTopLeft = Vector2.Add(
-            greebleLeftSide,
-            Vector2.ScalarMult(orthogonalVec, greeble.greebleDepth)
+            greebleTopCenter,
+            Vector2.ScalarMult(normalizedEdgeVec, -greeble.topBreadth/2)
           );
           let greebleTopRight = Vector2.Add(
-            greebleRightSide,
-            Vector2.ScalarMult(orthogonalVec, greeble.greebleDepth)
+            greebleTopCenter,
+            Vector2.ScalarMult(normalizedEdgeVec, greeble.topBreadth/2)
           );
           // Now, since we know we should be at vert0, let's go vert0 -> greebleLeftSide,
           // then build a bezier curve left -> topleft -> topright -> right, then go
