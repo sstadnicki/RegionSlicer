@@ -1,5 +1,7 @@
 import { Vector2 } from "./vector";
 
+const svgSpace: string = 'http://www.w3.org/2000/svg';
+
 // This class represents a set of connected polygons, along with the
 // connectivity information. For greatest flexibility, we take our polygons
 // as lists of edges along with their orientations; each edge contains two
@@ -46,6 +48,8 @@ export class PolygonMesh {
   vertices: Array<Vector2>;
   edges: Array<Edge>;
   polygons: Array<IndexedPolygon>;
+  viewMin: Vector2;
+  viewMax: Vector2;
 
   // The constructor builds a single rectangular polygon from the coordinates given
   constructor(min: Vector2, max: Vector2) {
@@ -53,6 +57,9 @@ export class PolygonMesh {
     let minY = min.data[1];
     let maxX = max.data[0];
     let maxY = max.data[1];
+
+    this.viewMin = min.clone();
+    this.viewMax = max.clone();
 
     // Define the four vertices of the rectangle
     this.vertices = [
@@ -238,5 +245,42 @@ export class PolygonMesh {
     this.polygons.push(newPoly);
     this.edges.concat([...newEdges]);
     this.edges.push(newMiddleEdge);
+  }
+
+  // Returns an SVG node with paths and polygon elements for each polygon in the mesh.
+  public generateSVG(): SVGElement {
+// A little one-off function for creating an 'x y' string from a Vector2
+    let Vec2ToStr: (v: Vector2, s:string) => string =
+    (v, s) => `${v.data[0]}${s}${v.data[1]}`;
+
+    let rootSVGElement: SVGElement = document.createElementNS(svgSpace, 'svg') as SVGElement;
+    let diagonalVec: Vector2 = Vector2.Subtract(this.viewMax, this.viewMin);
+    rootSVGElement.setAttribute("width", diagonalVec.data[0].toString());
+    rootSVGElement.setAttribute("height", diagonalVec.data[1].toString());
+    rootSVGElement.setAttribute("viewBox",
+      `${Vec2ToStr(this.viewMin, ' ')} ${Vec2ToStr(diagonalVec, ' ')}`
+    );
+    this.polygons.forEach(poly => {
+      let verts: Array<Vector2> = poly.map((oriEdge) =>
+        this.vertices[oriEdge.edge.indices[oriEdge.orientation]]
+      );
+      let groupElement: SVGGElement = document.createElementNS(svgSpace, 'g') as SVGGElement;
+      let pathElement: SVGPathElement = document.createElementNS(svgSpace, 'path') as SVGPathElement;
+      let polygonElement: SVGPolygonElement = document.createElementNS(svgSpace, 'polygon') as SVGPolygonElement;
+      let pathString = `M ${Vec2ToStr(verts[0], ' ')}`;
+      let polygonString = '';
+      verts.forEach((vert, vertIdx) => {
+        polygonString += ` ${Vec2ToStr(vert, ',')}`;
+        pathString += ` L ${Vec2ToStr(verts[(vertIdx+1)%verts.length], ' ')}`;
+      });
+      polygonElement.setAttribute('points', polygonString);
+      polygonElement.setAttribute('stroke', 'black');
+      polygonElement.setAttribute('fill', 'white');
+      pathElement.setAttribute('d', pathString);
+      groupElement.appendChild(pathElement);
+      groupElement.appendChild(polygonElement);
+      rootSVGElement.appendChild(groupElement);
+    });
+    return rootSVGElement;
   }
 }
