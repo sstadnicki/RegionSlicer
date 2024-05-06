@@ -32,7 +32,9 @@ type GreebleData = {
   // How wide (in global units) the greeble is at its base.
   baseBreadth: number,
   // How wide (in global units) the greeble's control points are at the top
-  topBreadth: number
+  topBreadth: number,
+  // Which side of the edge the two control points are on
+  edgeSide: [number, number]
 };
 
   // Helper function that finds the proportion of the way from v0 to v1 that the line
@@ -281,11 +283,18 @@ export class PolygonMesh {
           GREEBLE_BASE_BREADTH+GREEBLE_DELTA*(Math.floor(GREEBLE_LEVELS*Math.random())),
           0.25*edgeLength
         );
+        // We give equal probability to an edge being greebled either 'left' or 'right',
+        // and a slim probability to it being wave-greebled.
+        const waveGreebleOdds = 10; // 1-in-10 chance of wave greebling
+        let waveRandVal = (Math.floor(waveGreebleOdds*Math.random())== 0)? -1: 1;
+        // this will be +-1 with equal probability
+        let sideRandVal = 2*Math.floor(2*Math.random())-1;
         return {
           location: 0.3+0.4*Math.random(),
           depth: greebleDepth,
           baseBreadth: greebleBreadth,
-          topBreadth: 1.6*greebleBreadth
+          topBreadth: 1.6*greebleBreadth,
+          edgeSide: [sideRandVal, sideRandVal*waveRandVal]
         };
       });
     }
@@ -342,17 +351,17 @@ export class PolygonMesh {
             Vector2.ScalarMult(normalizedEdgeVec, greeble.baseBreadth/2)
           );
           // And the upper corners
-          let greebleTopCenter = Vector2.Add(
-            greebleMidpoint,
-            Vector2.ScalarMult(orthogonalVec, greeble.depth)
-          );
           let greebleTopLeft = Vector2.Add(
-            greebleTopCenter,
+            greebleMidpoint,
             Vector2.ScalarMult(normalizedEdgeVec, -greeble.topBreadth/2)
+          ).add(
+            Vector2.ScalarMult(orthogonalVec, greeble.depth * greeble.edgeSide[oriEdge.orientation])
           );
           let greebleTopRight = Vector2.Add(
-            greebleTopCenter,
+            greebleMidpoint,
             Vector2.ScalarMult(normalizedEdgeVec, greeble.topBreadth/2)
+          ).add(
+            Vector2.ScalarMult(orthogonalVec, greeble.depth * greeble.edgeSide[1-oriEdge.orientation])
           );
           // Now, since we know we should be at vert0, let's go vert0 -> greebleLeftSide,
           // then build a bezier curve left -> topleft -> topright -> right, then go
